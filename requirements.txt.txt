@@ -1,0 +1,11 @@
+streamlit
+<<<<<<< HEAD
+pandas
+scikit-learn
+=======
+easyocr
+opencv-python-headless
+numpy
+pillow
+googletrans==4.0.0-rc1
+>>>>>>> 8350da4 (Initial commit - Google Lens Translator app)
