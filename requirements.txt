@@ -1,7 +1,6 @@
 streamlit
 easyocr
-torch
-numpy
 opencv-python-headless
+numpy
 pillow
-googletrans==4.0.0-rc1
+deep-translator
