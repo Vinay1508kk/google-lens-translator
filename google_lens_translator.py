@@ -3,11 +3,10 @@ import easyocr
 import numpy as np
 import cv2
 from PIL import Image
-from googletrans import Translator
+from deep_translator import GoogleTranslator  # <-- Updated import
 
-# Initialize OCR and translator
+# Initialize OCR
 reader = easyocr.Reader(['en', 'hi', 'ta', 'te', 'fr', 'es'])
-translator = Translator()
 
 st.set_page_config(page_title="Google Lens + Translator", page_icon="🌐", layout="centered")
 
@@ -50,9 +49,9 @@ if uploaded_file is not None:
         st.subheader("📝 Extracted Text")
         st.text_area("Detected Text", combined_text, height=150)
 
-        # Translate
+        # Translate using deep-translator
         try:
-            translated = translator.translate(combined_text, dest=target_lang).text
+            translated = GoogleTranslator(source='auto', target=target_lang).translate(combined_text)
             st.subheader(f"🌐 Translated Text ({target_lang})")
             st.text_area("Translation", translated, height=150)
 
