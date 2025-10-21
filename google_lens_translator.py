@@ -3,11 +3,15 @@ import easyocr
 import numpy as np
 import cv2
 from PIL import Image
-from deep_translator import GoogleTranslator  # <-- Updated import
+from deep_translator import GoogleTranslator  # modern, Python-3.13-compatible translator
 
-# Initialize OCR
-reader = easyocr.Reader(['en', 'hi', 'ta', 'te', 'fr', 'es'])
+# -------------------------------------------------------------
+# ✅ Initialize OCR with supported languages
+# Only 'en', 'hi', 'ta', and 'te' can be safely combined
+reader = easyocr.Reader(['en', 'hi', 'ta', 'te'])
 
+# -------------------------------------------------------------
+# Streamlit app setup
 st.set_page_config(page_title="Google Lens + Translator", page_icon="🌐", layout="centered")
 
 st.title("🌐 Google Lens + Translator")
@@ -15,22 +19,29 @@ st.markdown("Upload or capture an image — detect, extract, and translate text 
 
 # Sidebar controls
 st.sidebar.header("⚙️ Settings")
-target_lang = st.sidebar.selectbox("Translate to:", ["en", "hi", "te", "ta", "fr", "es"])
-confidence_threshold = st.sidebar.slider("Detection Confidence", 0.0, 1.0, 0.5, 0.05)
+target_lang = st.sidebar.selectbox(
+    "Translate to:",
+    ["en", "hi", "te", "ta", "fr", "es"],  # output language choices
+)
+confidence_threshold = st.sidebar.slider(
+    "Detection Confidence", 0.0, 1.0, 0.5, 0.05
+)
 
-# Image source
+# -------------------------------------------------------------
+# Image input section
 option = st.radio("Choose Image Source:", ("Upload Image", "Use Camera"))
 if option == "Upload Image":
     uploaded_file = st.file_uploader("Choose an image", type=["jpg", "jpeg", "png"])
 else:
     uploaded_file = st.camera_input("Take a photo")
 
+# -------------------------------------------------------------
+# Process image when available
 if uploaded_file is not None:
     img = Image.open(uploaded_file).convert("RGB")
     img_np = np.array(img)
     results = reader.readtext(img_np)
 
-    # Draw boxes + collect text
     extracted_texts = []
     for (bbox, text, prob) in results:
         if prob >= confidence_threshold:
@@ -38,20 +49,24 @@ if uploaded_file is not None:
             tl = tuple(map(int, tl))
             br = tuple(map(int, br))
             cv2.rectangle(img_np, tl, br, (0, 255, 0), 2)
-            cv2.putText(img_np, text, (tl[0], tl[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
+            cv2.putText(
+                img_np, text, (tl[0], tl[1] - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2
+            )
             extracted_texts.append(text)
 
     st.subheader("🔍 Detected Text Regions")
     st.image(img_np, caption="Detected Text", use_container_width=True)
 
+    # ---------------------------------------------------------
+    # Display and translate text
     if extracted_texts:
         combined_text = "\n".join(extracted_texts)
         st.subheader("📝 Extracted Text")
         st.text_area("Detected Text", combined_text, height=150)
 
-        # Translate using deep-translator
         try:
-            translated = GoogleTranslator(source='auto', target=target_lang).translate(combined_text)
+            translated = GoogleTranslator(source="auto", target=target_lang).translate(combined_text)
             st.subheader(f"🌐 Translated Text ({target_lang})")
             st.text_area("Translation", translated, height=150)
 
