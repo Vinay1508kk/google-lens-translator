@@ -5,8 +5,8 @@ import cv2
 from PIL import Image
 from deep_translator import GoogleTranslator
 
-st.set_page_config(page_title="Google Lens + Translator", page_icon="🌐", layout="centered")
-st.title("🌐 Google Lens + Translator")
+st.set_page_config(page_title="ETL NET", page_icon="🌐", layout="centered")
+st.title("▫️ ETL NET ▫️")
 st.markdown("Upload or capture an image — detect, extract, and translate text instantly!")
 
 # Sidebar
@@ -70,4 +70,5 @@ if uploaded_file is not None:
             st.error(f"Translation failed: {e}")
     else:
         st.warning("No text detected — try a clearer image.")
+
 
