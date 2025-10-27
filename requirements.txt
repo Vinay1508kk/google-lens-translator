@@ -6,6 +6,7 @@ Pillow==10.3.0
 deep-translator==1.11.4
 gTTS==2.5.3
 PyPDF2==3.0.1
-torch==2.3.1
-torchvision==0.18.1
+torch==2.3.1+cpu
+torchvision==0.18.1+cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
 
