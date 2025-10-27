@@ -8,26 +8,21 @@ from io import BytesIO
 from gtts import gTTS
 from PyPDF2 import PdfReader
 
-# === Supported Languages for Translation (Google) ===
+# === Translation Language Support ===
 try:
     lang_dict = GoogleTranslator().get_supported_languages(as_dict=True)
     LANGUAGES = {code: name.lower() for name, code in lang_dict.items()}
 except Exception:
     LANGUAGES = {
         'en': 'english', 'hi': 'hindi', 'ta': 'tamil', 'te': 'telugu',
-        'fr': 'french', 'es': 'spanish', 'de': 'german', 'pt': 'portuguese',
-        'ru': 'russian', 'ja': 'japanese', 'ko': 'korean'
-        # 'zh-CN' removed from OCR, but can stay in translation if needed
+        'fr': 'french', 'es': 'spanish', 'de': 'german', 'pt': 'portuguese', 'ru': 'russian'
     }
 
-# === Load EasyOCR Reader (without ch_sim to avoid crash) ===
+# === Load OCR Reader (Only Compatible Languages) ===
 @st.cache_resource
 def load_easyocr_reader():
-    # ✅ Only use fully compatible languages
-    return easyocr.Reader(
-        ['en', 'hi', 'ta', 'te', 'fr', 'es', 'de', 'pt', 'ru', 'ja', 'ko'],
-        verbose=False
-    )
+    # ✅ These languages work together in EasyOCR's multilingual model
+    return easyocr.Reader(['en', 'hi', 'ta', 'te', 'fr', 'es', 'de', 'pt', 'ru'], verbose=False)
 
 reader = load_easyocr_reader()
 
@@ -223,8 +218,7 @@ with st.sidebar:
     st.markdown("### Critic Lens")
     st.caption("v1.0 · Insight Engine")
     
-    # Filter only supported OCR languages (no zh-CN)
-    supported_codes = ['en','hi','ta','te','fr','es','de','pt','ru','ja','ko']
+    supported_codes = ['en','hi','ta','te','fr','es','de','pt','ru']
     lang_options = [(name.capitalize(), code) for code, name in LANGUAGES.items() if code in supported_codes]
     lang_options.sort()
     target_lang = st.selectbox("Translate to", lang_options, format_func=lambda x: x[0], index=0)
@@ -233,7 +227,7 @@ with st.sidebar:
     confidence_threshold = st.slider("OCR Confidence", 0.0, 1.0, 0.5, 0.05)
     enable_tts = st.checkbox("🔊 Text-to-Speech", value=True)
     st.markdown("---")
-    st.caption("🧠 AI-powered\n🌐 11 languages\n⚡ Real-time insight")
+    st.caption("🧠 AI-powered\n🌐 9 languages\n⚡ Real-time insight")
     st.markdown('</div>', unsafe_allow_html=True)
 
 # === Main Processing ===
@@ -331,7 +325,7 @@ if uploaded_file is not None:
             To analyze this image with **Google Lens**:
             1. **Right-click** the image above → **Save image as...**
             2. Go to [lens.google.com](https://lens.google.com)
-            3. Click the **camera icon** → **Upload image**
+            3. Click the 📷 icon → **Upload image**
             """)
             st.markdown('</div>', unsafe_allow_html=True)
 
