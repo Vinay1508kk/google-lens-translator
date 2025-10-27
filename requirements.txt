@@ -1,10 +1,11 @@
-streamlit==1.39.0
+streamlit==1.38.0
 easyocr==1.7.1
-deep-translator==1.11.4
-gtts==2.5.3
-Pillow==10.3.0
+opencv-python-headless==4.10.0.84
 numpy==1.26.4
-opencv-python-headless==4.9.0.80
-torch==2.1.0
-torchvision==0.16.0
+Pillow==10.3.0
+deep-translator==1.11.4
+gTTS==2.5.3
+PyPDF2==3.0.1
+torch==2.3.1
+torchvision==0.18.1
 
