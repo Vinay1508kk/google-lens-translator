@@ -1,137 +1,108 @@
 import streamlit as st
 import easyocr
-import numpy as np
-import cv2
-from PIL import Image
-from deep_translator import GoogleTranslator
-from io import BytesIO
+from googletrans import Translator
 from gtts import gTTS
-from PyPDF2 import PdfReader
+from io import BytesIO
+from PIL import Image
+import numpy as np
+import tempfile
+import base64
+import io
 
-# === Translation Language Support ===
-try:
-    lang_dict = GoogleTranslator().get_supported_languages(as_dict=True)
-    LANGUAGES = {code: name.lower() for name, code in lang_dict.items()}
-except Exception:
-    LANGUAGES = {
-        'en': 'english', 'hi': 'hindi', 'ta': 'tamil', 'te': 'telugu',
-        'fr': 'french', 'es': 'spanish', 'de': 'german', 'pt': 'portuguese', 'ru': 'russian'
-    }
+# ---------------------- STREAMLIT PAGE CONFIG ----------------------
+st.set_page_config(page_title="Critic Lens", page_icon="📸", layout="wide")
 
-# === Safe EasyOCR Reader Loader ===
+# Custom header style
+st.markdown("""
+    <h1 style='text-align: center; color: #4A90E2;'>📸 Critic Lens</h1>
+    <p style='text-align: center; color: #888;'>Smart Text Detection • Translation • Voice Output</p>
+    <hr>
+""", unsafe_allow_html=True)
+
+# ---------------------- EASYOCR LOADING ----------------------
 @st.cache_resource
-def load_easyocr_reader(language_codes):
-    """
-    Load EasyOCR Reader with compatible language groups.
-    Tamil and Telugu only work with English.
-    """
-    safe_langs = ['en']  # always include English
+def load_easyocr_reader():
+    # Avoid incompatible language errors — use English + popular supported languages only
+    allowed_langs = ['en', 'hi', 'ta', 'te']
+    return easyocr.Reader(allowed_langs, verbose=False)
 
-    if 'ta' in language_codes:
-        safe_langs = ['en', 'ta']
-    elif 'te' in language_codes:
-        safe_langs = ['en', 'te']
-    else:
-        # Only include globally compatible languages
-        safe_langs = [lang for lang in language_codes if lang not in ['ta', 'te']]
+reader = load_easyocr_reader()
+translator = Translator()
 
-    st.write(f"🧠 Loaded EasyOCR languages: {safe_langs}")
-    return easyocr.Reader(safe_langs, verbose=False)
+# ---------------------- IMAGE INPUT SECTION ----------------------
+option = st.radio("Choose Input Type:", ["Upload Image", "Use Camera"])
 
-# === Sidebar ===
-with st.sidebar:
-    st.image("https://emojicdn.elk.sh/👁️?style=twitter&size=64", width=40)
-    st.markdown("### Critic Lens · v1.0")
+img = None
+if option == "Upload Image":
+    uploaded_file = st.file_uploader("Upload an image (jpg, jpeg, png)", type=["jpg", "jpeg", "png"])
+    if uploaded_file is not None:
+        try:
+            image_bytes = uploaded_file.read()
+            img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            st.image(img, caption="Uploaded Image", use_container_width=True)
+        except Exception as e:
+            st.error(f"Error loading image: {e}")
+elif option == "Use Camera":
+    captured = st.camera_input("Take a picture")
+    if captured:
+        try:
+            img = Image.open(captured).convert("RGB")
+            st.image(img, caption="Captured Image", use_container_width=True)
+        except Exception as e:
+            st.error(f"Error capturing image: {e}")
 
-    supported_codes = ['en','hi','ta','te','fr','es','de','pt','ru']
-    lang_options = [(name.capitalize(), code) for code, name in LANGUAGES.items() if code in supported_codes]
-    lang_options.sort()
-    target_lang = st.selectbox("Translate to", lang_options, format_func=lambda x: x[0], index=0)
-    target_lang_code = target_lang[1]
-    confidence_threshold = st.slider("OCR Confidence", 0.0, 1.0, 0.5, 0.05)
-    enable_tts = st.checkbox("🔊 Enable Text-to-Speech", value=True)
+# ---------------------- OCR PROCESSING ----------------------
+if img is not None:
+    st.subheader("🔍 Text Detection and Extraction")
 
-# === Load EasyOCR Reader (SAFE) ===
-reader = load_easyocr_reader(['en'])  # default base reader (safe for all)
-
-# === Helper Functions ===
-def extract_text_from_pdf(pdf_file):
-    pdf_reader = PdfReader(pdf_file)
-    return "".join(page.extract_text() or "" for page in pdf_reader.pages)
-
-def ocr_with_easyocr(image_np, confidence_threshold=0.5):
-    results = reader.readtext(image_np)
-    return " ".join(text for _, text, prob in results if prob >= confidence_threshold)
-
-# === UI Header ===
-st.title("👁️ Critic Lens")
-st.markdown("#### An AI that reads, translates, and speaks your text.")
-
-# === Input Selection ===
-option = st.radio("Choose input type:", ("📸 Image", "📄 PDF", "📷 Camera"), horizontal=True)
-uploaded_file = None
-input_type = None
-
-if option == "📸 Image":
-    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
-    input_type = "image"
-elif option == "📄 PDF":
-    uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
-    input_type = "pdf"
-else:
-    uploaded_file = st.camera_input("Take a photo")
-    input_type = "image"
-
-# === Processing ===
-if uploaded_file is not None:
-    detected_text = ""
-    img_for_display = None
-
-    if input_type == "pdf":
-        with st.spinner("📄 Reading PDF..."):
-            detected_text = extract_text_from_pdf(uploaded_file)
-    else:
-        img = Image.open(uploaded_file).convert("RGB")
-        img_np = np.array(img)
-        img_for_display = img_np.copy()
-
-        with st.spinner("👁️ Extracting text with OCR..."):
-            detected_text = ocr_with_easyocr(img_np, confidence_threshold)
-            results = reader.readtext(img_np)
-            for (bbox, text, prob) in results:
-                if prob >= confidence_threshold:
-                    tl = tuple(map(int, bbox[0]))
-                    br = tuple(map(int, bbox[2]))
-                    cv2.rectangle(img_for_display, tl, br, (109, 93, 252), 2)
-
-    if detected_text.strip():
-        if img_for_display is not None:
-            st.image(img_for_display, use_container_width=True)
-        st.subheader("🔍 Extracted Text")
-        st.code(detected_text)
-
-        # === Translation ===
-        with st.spinner(f"Translating to {target_lang[0]}..."):
+    if st.button("Extract Text"):
+        with st.spinner("Reading text... please wait ⏳"):
             try:
-                translated = GoogleTranslator(source='auto', target=target_lang_code).translate(detected_text)
-                st.subheader("💬 Translation")
-                st.code(translated)
-                st.download_button("💾 Download Translation", translated, f"translated_{target_lang_code}.txt")
+                img_array = np.array(img)
+                results = reader.readtext(img_array)
+                detected_text = "\n".join([res[1] for res in results])
 
-                if enable_tts:
-                    try:
-                        tts = gTTS(text=translated, lang=target_lang_code)
-                        fp = BytesIO()
-                        tts.write_to_fp(fp)
-                        fp.seek(0)
-                        st.audio(fp, format="audio/mp3")
-                    except:
-                        st.warning("TTS unavailable for this language.")
+                if detected_text.strip() == "":
+                    st.warning("No readable text found in the image.")
+                else:
+                    st.success("✅ Text extracted successfully!")
+                    st.text_area("Extracted Text", detected_text, height=200)
+
+                    # ---------------------- TRANSLATION ----------------------
+                    st.subheader("🌐 Translation")
+                    target_lang = st.selectbox(
+                        "Translate to:",
+                        options=["en", "hi", "ta", "te", "fr", "es", "de", "pt", "ru"],
+                        index=0
+                    )
+
+                    if st.button("Translate Text"):
+                        with st.spinner("Translating..."):
+                            try:
+                                translated = translator.translate(detected_text, dest=target_lang).text
+                                st.success("✅ Translation completed!")
+                                st.text_area("Translated Text", translated, height=200)
+
+                                # ---------------------- TEXT-TO-SPEECH ----------------------
+                                st.subheader("🔊 Listen to Translation")
+                                if st.button("Generate Audio"):
+                                    tts = gTTS(translated, lang=target_lang if target_lang != "ta" else "en")
+                                    audio_fp = BytesIO()
+                                    tts.write_to_fp(audio_fp)
+                                    audio_fp.seek(0)
+                                    st.audio(audio_fp, format="audio/mp3")
+                            except Exception as e:
+                                st.error(f"Translation Error: {e}")
             except Exception as e:
-                st.error(f"Translation failed: {e}")
-
-    else:
-        st.warning("📭 No readable text found.")
+                st.error(f"OCR Error: {e}")
 else:
-    st.info("Upload an image, PDF, or take a photo to start.")
+    st.info("Please upload or capture an image to start.")
+
+# ---------------------- FOOTER ----------------------
+st.markdown("""
+<hr>
+<p style='text-align:center; color:#aaa;'>
+Developed by <b>Critic Lens</b> • Powered by EasyOCR + Google Translate + gTTS
+</p>
+""", unsafe_allow_html=True)
 
