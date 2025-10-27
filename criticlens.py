@@ -4,44 +4,33 @@ import numpy as np
 import cv2
 from PIL import Image
 from deep_translator import GoogleTranslator
-import requests
 import uuid
 from io import BytesIO
 from gtts import gTTS
 from PyPDF2 import PdfReader
 
-# === Get language support safely ===
+# === Language Support ===
 try:
     lang_name_to_code = GoogleTranslator().get_supported_languages(as_dict=True)
     LANGUAGES = {code: name.lower() for name, code in lang_name_to_code.items()}
 except Exception:
-    # Fallback if API changes
     LANGUAGES = {
         'en': 'english', 'hi': 'hindi', 'ta': 'tamil', 'te': 'telugu',
         'fr': 'french', 'es': 'spanish', 'de': 'german', 'pt': 'portuguese',
         'ru': 'russian', 'ja': 'japanese', 'ko': 'korean', 'zh-CN': 'chinese (simplified)'
     }
 
-USE_GOOGLE_CLOUD_VISION = False
-
 @st.cache_resource
 def load_easyocr_reader():
-    return easyocr.Reader(['en', 'hi', 'ta', 'te', 'fr', 'es', 'de', 'pt', 'ru', 'ja', 'ko', 'zh-cn'], verbose=False)
+    # ✅ FIXED: 'zh-cn' → 'ch_sim' for EasyOCR
+    return easyocr.Reader(
+        ['en', 'hi', 'ta', 'te', 'fr', 'es', 'de', 'pt', 'ru', 'ja', 'ko', 'ch_sim'],
+        verbose=False
+    )
 
 reader = load_easyocr_reader()
 
 # === Helper Functions ===
-def upload_to_tmpfiles(image_bytes):
-    try:
-        files = {'file': (f"{uuid.uuid4().hex}.png", image_bytes, 'image/png')}
-        response = requests.post("https://tmpfiles.org/api/v1/upload", files=files, timeout=10)
-        if response.status_code == 200:
-            url = response.json()['data']['url']
-            return url.replace("/dl/", "/")
-    except Exception as e:
-        st.write(f"Debug upload error: {e}")
-    return None
-
 def extract_text_from_pdf(pdf_file):
     pdf_reader = PdfReader(pdf_file)
     return "".join(page.extract_text() or "" for page in pdf_reader.pages)
@@ -50,7 +39,7 @@ def ocr_with_easyocr(image_np, confidence_threshold=0.5):
     results = reader.readtext(image_np)
     return " ".join(text for _, text, prob in results if prob >= confidence_threshold)
 
-# === CRITIC LENS: CUSTOM THEME ===
+# === CRITIC LENS THEME ===
 def add_critic_lens_theme():
     st.markdown("""
     <style>
@@ -139,10 +128,6 @@ def add_critic_lens_theme():
         font-size: 0.85rem !important;
         margin: 0.2rem 0.3rem 0.2rem 0 !important;
         transition: all 0.2s ease;
-    }
-    .copy-btn:hover, .search-btn:hover {
-        background: rgba(109, 93, 252, 0.25) !important;
-        transform: scale(1.03);
     }
 
     .language-tag {
@@ -336,36 +321,16 @@ if uploaded_file is not None:
             except Exception as e:
                 st.error(f"❌ Translation failed: {str(e)}")
 
-        # === Google Lens Search ===
+        # === Google Lens Manual Instructions ===
         if input_type == "image":
             st.markdown('<div class="result-card">', unsafe_allow_html=True)
-            st.subheader("👁️ Lens Search")
-            if st.button("🔍 Analyze with Google Lens"):
-                with st.spinner("📤 Sending to visual AI..."):
-                    buf = BytesIO()
-                    img.save(buf, format="PNG")
-                    public_url = upload_to_tmpfiles(buf.getvalue())
-                    if public_url:
-                        lens_url = f"https://lens.google.com/uploadbyurl?url={public_url}"
-                        st.markdown(f"""
-                            <div style="text-align:center; margin:1rem 0;">
-                                <a href="{lens_url}" target="_blank">
-                                    <button class="stButton" style="
-                                        background: linear-gradient(90deg, #6d5dfc, #8a7cfb);
-                                        color:white; border:none; border-radius:18px;
-                                        padding:0.55rem 1.6rem; font-weight:600;
-                                        box-shadow: 0 4px 14px rgba(109, 93, 252, 0.4);
-                                    ">
-                                        🔍 Open in Google Lens
-                                    </button>
-                                </a>
-                                <p style="font-size:0.82rem; color:var(--text-secondary); margin-top:0.6rem;">
-                                    Image expires in ~60 minutes
-                                </p>
-                            </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.error("❌ Upload failed. Try again.")
+            st.subheader("👁️ Visual Search (Google Lens)")
+            st.markdown("""
+            To analyze this image with **Google Lens**:
+            1. Right-click the image above → **Save image as...**
+            2. Go to [lens.google.com](https://lens.google.com)
+            3. Upload the saved image
+            """)
             st.markdown('</div>', unsafe_allow_html=True)
 
     else:
