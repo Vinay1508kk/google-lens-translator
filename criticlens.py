@@ -3,15 +3,24 @@ import easyocr
 import numpy as np
 import cv2
 from PIL import Image
-from deep_translator import GoogleTranslator, GOOGLE_LANGUAGES_TO_CODES
+from deep_translator import GoogleTranslator
 import requests
 import uuid
 from io import BytesIO
 from gtts import gTTS
 from PyPDF2 import PdfReader
 
-# Build LANGUAGES dict: code -> name (lowercase)
-LANGUAGES = {code: name.lower() for name, code in GOOGLE_LANGUAGES_TO_CODES.items()}
+# === Get language support safely ===
+try:
+    lang_name_to_code = GoogleTranslator().get_supported_languages(as_dict=True)
+    LANGUAGES = {code: name.lower() for name, code in lang_name_to_code.items()}
+except Exception:
+    # Fallback if API changes
+    LANGUAGES = {
+        'en': 'english', 'hi': 'hindi', 'ta': 'tamil', 'te': 'telugu',
+        'fr': 'french', 'es': 'spanish', 'de': 'german', 'pt': 'portuguese',
+        'ru': 'russian', 'ja': 'japanese', 'ko': 'korean', 'zh-CN': 'chinese (simplified)'
+    }
 
 USE_GOOGLE_CLOUD_VISION = False
 
@@ -25,7 +34,6 @@ reader = load_easyocr_reader()
 def upload_to_tmpfiles(image_bytes):
     try:
         files = {'file': (f"{uuid.uuid4().hex}.png", image_bytes, 'image/png')}
-        # ✅ Fixed: no extra spaces in URL
         response = requests.post("https://tmpfiles.org/api/v1/upload", files=files, timeout=10)
         if response.status_code == 200:
             url = response.json()['data']['url']
@@ -192,10 +200,10 @@ def add_critic_lens_theme():
     </script>
     """, unsafe_allow_html=True)
 
-# === Apply Critic Lens Theme ===
+# === Apply Theme ===
 add_critic_lens_theme()
 
-# === App Header ===
+# === Header ===
 st.title("👁️ Critic Lens")
 st.markdown(
     '<p class="app-subtitle">An AI that doesn’t just read text — it <b>understands context</b>, translates meaning, and reveals insight.</p>',
@@ -225,13 +233,12 @@ st.markdown('</div>', unsafe_allow_html=True)
 # === Sidebar ===
 with st.sidebar:
     st.markdown('<div style="padding:1rem 0;">', unsafe_allow_html=True)
-    # ✅ Fixed: clean emoji URL
     st.image("https://emojicdn.elk.sh/👁️?style=twitter&size=64", width=40)
     st.markdown("### Critic Lens")
     st.caption("v1.0 · Insight Engine")
     
     lang_options = [(name.capitalize(), code) for code, name in LANGUAGES.items() 
-                    if code in ['en','hi','ta','te','fr','es','de','pt','ru','ja','ko','zh-cn']]
+                    if code in ['en','hi','ta','te','fr','es','de','pt','ru','ja','ko','zh-CN']]
     lang_options.sort()
     target_lang = st.selectbox("Translate to", lang_options, format_func=lambda x: x[0], index=0)
     target_lang_code = target_lang[1]
@@ -274,8 +281,6 @@ if uploaded_file is not None:
         st.markdown('<div class="result-card">', unsafe_allow_html=True)
         st.subheader("🔍 Extracted Insight")
         st.code(detected_text, language=None)
-
-        # ✅ No language detection — just show "Auto"
         st.markdown("<small>🔤 Source: <b>Auto-detected</b></small>", unsafe_allow_html=True)
 
         safe_text = (detected_text
@@ -292,45 +297,44 @@ if uploaded_file is not None:
         """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # ✅ Translate using deep-translator (no detection needed)
-        if True:  # Always offer translation
-            with st.spinner(f"🌀 Translating to {target_lang[0]}..."):
-                try:
-                    translated = GoogleTranslator(source='auto', target=target_lang_code).translate(detected_text)
-                    st.markdown('<div class="result-card">', unsafe_allow_html=True)
-                    st.subheader("💬 Translated Insight")
-                    st.markdown(f'<span class="language-tag">{target_lang[0]}</span>', unsafe_allow_html=True)
-                    st.code(translated, language=None)
+        # === Translation ===
+        with st.spinner(f"🌀 Translating to {target_lang[0]}..."):
+            try:
+                translated = GoogleTranslator(source='auto', target=target_lang_code).translate(detected_text)
+                st.markdown('<div class="result-card">', unsafe_allow_html=True)
+                st.subheader("💬 Translated Insight")
+                st.markdown(f'<span class="language-tag">{target_lang[0]}</span>', unsafe_allow_html=True)
+                st.code(translated, language=None)
 
-                    if enable_tts:
-                        try:
-                            tts = gTTS(text=translated, lang=target_lang_code, slow=False)
-                            fp = BytesIO()
-                            tts.write_to_fp(fp)
-                            fp.seek(0)
-                            st.audio(fp, format="audio/mp3")
-                        except Exception as tts_error:
-                            st.warning("🔊 TTS unavailable for this language.")
+                if enable_tts:
+                    try:
+                        tts = gTTS(text=translated, lang=target_lang_code, slow=False)
+                        fp = BytesIO()
+                        tts.write_to_fp(fp)
+                        fp.seek(0)
+                        st.audio(fp, format="audio/mp3")
+                    except:
+                        st.warning("🔊 TTS unavailable for this language.")
 
-                    safe_trans = (translated
-                                  .replace("\\", "\\\\")
-                                  .replace("`", "\\`")
-                                  .replace("\n", "\\n")
-                                  .replace("'", "\\'")
-                                  .replace('"', '\\"'))
-                    st.markdown(f"""
-                        <button class="copy-btn" onclick="copyToClipboard(`{safe_trans}`)">📋 Copy Translation</button>
-                    """, unsafe_allow_html=True)
+                safe_trans = (translated
+                              .replace("\\", "\\\\")
+                              .replace("`", "\\`")
+                              .replace("\n", "\\n")
+                              .replace("'", "\\'")
+                              .replace('"', '\\"'))
+                st.markdown(f"""
+                    <button class="copy-btn" onclick="copyToClipboard(`{safe_trans}`)">📋 Copy Translation</button>
+                """, unsafe_allow_html=True)
 
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.download_button("💾 Original", detected_text, "insight.txt", "text/plain")
-                    with col2:
-                        st.download_button("💾 Translation", translated, f"insight_{target_lang_code}.txt", "text/plain")
-                    st.markdown('</div>', unsafe_allow_html=True)
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.download_button("💾 Original", detected_text, "insight.txt", "text/plain")
+                with col2:
+                    st.download_button("💾 Translation", translated, f"insight_{target_lang_code}.txt", "text/plain")
+                st.markdown('</div>', unsafe_allow_html=True)
 
-                except Exception as e:
-                    st.error(f"❌ Translation failed: {str(e)}")
+            except Exception as e:
+                st.error(f"❌ Translation failed: {str(e)}")
 
         # === Google Lens Search ===
         if input_type == "image":
@@ -342,7 +346,6 @@ if uploaded_file is not None:
                     img.save(buf, format="PNG")
                     public_url = upload_to_tmpfiles(buf.getvalue())
                     if public_url:
-                        # ✅ Fixed: no extra spaces
                         lens_url = f"https://lens.google.com/uploadbyurl?url={public_url}"
                         st.markdown(f"""
                             <div style="text-align:center; margin:1rem 0;">
@@ -370,7 +373,6 @@ if uploaded_file is not None:
 
 else:
     st.markdown('<div class="result-card" style="text-align:center; padding:2rem;">', unsafe_allow_html=True)
-    # ✅ Fixed emoji URL
     st.image("https://emojicdn.elk.sh/👁️?style=twitter&size=128", width=80)
     st.markdown("### Ready to Critique the Visible World")
     st.markdown("Upload an image, PDF, or snap a photo to begin.")
