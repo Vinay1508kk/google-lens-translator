@@ -4,27 +4,28 @@ import numpy as np
 import cv2
 from PIL import Image
 from deep_translator import GoogleTranslator
-import uuid
 from io import BytesIO
 from gtts import gTTS
 from PyPDF2 import PdfReader
 
-# === Language Support ===
+# === Supported Languages for Translation (Google) ===
 try:
-    lang_name_to_code = GoogleTranslator().get_supported_languages(as_dict=True)
-    LANGUAGES = {code: name.lower() for name, code in lang_name_to_code.items()}
+    lang_dict = GoogleTranslator().get_supported_languages(as_dict=True)
+    LANGUAGES = {code: name.lower() for name, code in lang_dict.items()}
 except Exception:
     LANGUAGES = {
         'en': 'english', 'hi': 'hindi', 'ta': 'tamil', 'te': 'telugu',
         'fr': 'french', 'es': 'spanish', 'de': 'german', 'pt': 'portuguese',
-        'ru': 'russian', 'ja': 'japanese', 'ko': 'korean', 'zh-CN': 'chinese (simplified)'
+        'ru': 'russian', 'ja': 'japanese', 'ko': 'korean'
+        # 'zh-CN' removed from OCR, but can stay in translation if needed
     }
 
+# === Load EasyOCR Reader (without ch_sim to avoid crash) ===
 @st.cache_resource
 def load_easyocr_reader():
-    # ✅ FIXED: 'zh-cn' → 'ch_sim' for EasyOCR
+    # ✅ Only use fully compatible languages
     return easyocr.Reader(
-        ['en', 'hi', 'ta', 'te', 'fr', 'es', 'de', 'pt', 'ru', 'ja', 'ko', 'ch_sim'],
+        ['en', 'hi', 'ta', 'te', 'fr', 'es', 'de', 'pt', 'ru', 'ja', 'ko'],
         verbose=False
     )
 
@@ -39,7 +40,7 @@ def ocr_with_easyocr(image_np, confidence_threshold=0.5):
     results = reader.readtext(image_np)
     return " ".join(text for _, text, prob in results if prob >= confidence_threshold)
 
-# === CRITIC LENS THEME ===
+# === Critic Lens UI Theme ===
 def add_critic_lens_theme():
     st.markdown("""
     <style>
@@ -119,7 +120,7 @@ def add_critic_lens_theme():
         box-shadow: 0 6px 16px rgba(109, 93, 252, 0.45);
     }
 
-    .copy-btn, .search-btn, .tts-btn {
+    .copy-btn, .search-btn {
         background: rgba(109, 93, 252, 0.15) !important;
         color: var(--accent-cyan) !important;
         border: 1px solid rgba(109, 93, 252, 0.3) !important;
@@ -222,8 +223,9 @@ with st.sidebar:
     st.markdown("### Critic Lens")
     st.caption("v1.0 · Insight Engine")
     
-    lang_options = [(name.capitalize(), code) for code, name in LANGUAGES.items() 
-                    if code in ['en','hi','ta','te','fr','es','de','pt','ru','ja','ko','zh-CN']]
+    # Filter only supported OCR languages (no zh-CN)
+    supported_codes = ['en','hi','ta','te','fr','es','de','pt','ru','ja','ko']
+    lang_options = [(name.capitalize(), code) for code, name in LANGUAGES.items() if code in supported_codes]
     lang_options.sort()
     target_lang = st.selectbox("Translate to", lang_options, format_func=lambda x: x[0], index=0)
     target_lang_code = target_lang[1]
@@ -231,10 +233,10 @@ with st.sidebar:
     confidence_threshold = st.slider("OCR Confidence", 0.0, 1.0, 0.5, 0.05)
     enable_tts = st.checkbox("🔊 Text-to-Speech", value=True)
     st.markdown("---")
-    st.caption("🧠 AI-powered\n🌐 12 languages\n⚡ Real-time insight")
+    st.caption("🧠 AI-powered\n🌐 11 languages\n⚡ Real-time insight")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# === Processing ===
+# === Main Processing ===
 if uploaded_file is not None:
     detected_text = ""
     img_for_display = None
@@ -321,15 +323,15 @@ if uploaded_file is not None:
             except Exception as e:
                 st.error(f"❌ Translation failed: {str(e)}")
 
-        # === Google Lens Manual Instructions ===
+        # === Google Lens Instructions ===
         if input_type == "image":
             st.markdown('<div class="result-card">', unsafe_allow_html=True)
             st.subheader("👁️ Visual Search (Google Lens)")
             st.markdown("""
             To analyze this image with **Google Lens**:
-            1. Right-click the image above → **Save image as...**
+            1. **Right-click** the image above → **Save image as...**
             2. Go to [lens.google.com](https://lens.google.com)
-            3. Upload the saved image
+            3. Click the **camera icon** → **Upload image**
             """)
             st.markdown('</div>', unsafe_allow_html=True)
 
