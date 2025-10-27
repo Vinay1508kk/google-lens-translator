@@ -7,3 +7,4 @@ gTTS==2.5.1
 numpy==1.26.4
 requests==2.32.3
 deep-translator==1.11.4
+googletrans==4.0.0-rc1
