@@ -1,7 +1,6 @@
 streamlit
 easyocr
-deep-translator
-gTTS
+googletrans==4.1.0a0
+gtts
 Pillow
 numpy
-
