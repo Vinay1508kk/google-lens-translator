@@ -1,12 +1,10 @@
 import streamlit as st
 import easyocr
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 from gtts import gTTS
 from io import BytesIO
 from PIL import Image
 import numpy as np
-import tempfile
-import base64
 import io
 
 # ---------------------- STREAMLIT PAGE CONFIG ----------------------
@@ -22,12 +20,11 @@ st.markdown("""
 # ---------------------- EASYOCR LOADING ----------------------
 @st.cache_resource
 def load_easyocr_reader():
-    # Avoid incompatible language errors — use English + popular supported languages only
+    # Restrict to compatible language sets
     allowed_langs = ['en', 'hi', 'ta', 'te']
     return easyocr.Reader(allowed_langs, verbose=False)
 
 reader = load_easyocr_reader()
-translator = Translator()
 
 # ---------------------- IMAGE INPUT SECTION ----------------------
 option = st.radio("Choose Input Type:", ["Upload Image", "Use Camera"])
@@ -79,7 +76,7 @@ if img is not None:
                     if st.button("Translate Text"):
                         with st.spinner("Translating..."):
                             try:
-                                translated = translator.translate(detected_text, dest=target_lang).text
+                                translated = GoogleTranslator(source='auto', target=target_lang).translate(detected_text)
                                 st.success("✅ Translation completed!")
                                 st.text_area("Translated Text", translated, height=200)
 
@@ -102,7 +99,6 @@ else:
 st.markdown("""
 <hr>
 <p style='text-align:center; color:#aaa;'>
-Developed by <b>Critic Lens</b> • Powered by EasyOCR + Google Translate + gTTS
+Developed by <b>Critic Lens</b> • Powered by EasyOCR + Deep Translator + gTTS
 </p>
 """, unsafe_allow_html=True)
-
