@@ -3,12 +3,15 @@ import easyocr
 import numpy as np
 import cv2
 from PIL import Image
-from googletrans import Translator, LANGUAGES
+from deep_translator import GoogleTranslator, GOOGLE_LANGUAGES_TO_CODES
 import requests
 import uuid
 from io import BytesIO
 from gtts import gTTS
 from PyPDF2 import PdfReader
+
+# Build LANGUAGES dict: code -> name (lowercase)
+LANGUAGES = {code: name.lower() for name, code in GOOGLE_LANGUAGES_TO_CODES.items()}
 
 USE_GOOGLE_CLOUD_VISION = False
 
@@ -16,25 +19,19 @@ USE_GOOGLE_CLOUD_VISION = False
 def load_easyocr_reader():
     return easyocr.Reader(['en', 'hi', 'ta', 'te', 'fr', 'es', 'de', 'pt', 'ru', 'ja', 'ko', 'zh-cn'], verbose=False)
 
-@st.cache_resource
-def get_translator():
-    return Translator()
-
 reader = load_easyocr_reader()
-translator = get_translator()
 
 # === Helper Functions ===
 def upload_to_tmpfiles(image_bytes):
     try:
         files = {'file': (f"{uuid.uuid4().hex}.png", image_bytes, 'image/png')}
-        # Fixed URL (removed extra spaces)
+        # ✅ Fixed: no extra spaces in URL
         response = requests.post("https://tmpfiles.org/api/v1/upload", files=files, timeout=10)
         if response.status_code == 200:
             url = response.json()['data']['url']
             return url.replace("/dl/", "/")
     except Exception as e:
         st.write(f"Debug upload error: {e}")
-        pass
     return None
 
 def extract_text_from_pdf(pdf_file):
@@ -161,10 +158,6 @@ def add_critic_lens_theme():
         font-family: 'JetBrains Mono', monospace;
     }
 
-    .theme-toggle-container {
-        display: none; /* Hidden — dark is default & only theme */
-    }
-
     .app-subtitle {
         font-size: 1.15rem;
         color: var(--text-secondary);
@@ -209,7 +202,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# === Input Section (Styled) ===
+# === Input Section ===
 st.markdown('<div class="input-section">', unsafe_allow_html=True)
 st.subheader("📤 Upload Content")
 option = st.radio("Choose input type:", ("📸 Image", "📄 PDF", "📷 Camera"), horizontal=True, label_visibility="collapsed")
@@ -229,9 +222,10 @@ else:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# === Sidebar (Minimal) ===
+# === Sidebar ===
 with st.sidebar:
     st.markdown('<div style="padding:1rem 0;">', unsafe_allow_html=True)
+    # ✅ Fixed: clean emoji URL
     st.image("https://emojicdn.elk.sh/👁️?style=twitter&size=64", width=40)
     st.markdown("### Critic Lens")
     st.caption("v1.0 · Insight Engine")
@@ -268,7 +262,7 @@ if uploaded_file is not None:
                 if prob >= confidence_threshold:
                     tl = tuple(map(int, bbox[0]))
                     br = tuple(map(int, bbox[2]))
-                    cv2.rectangle(img_for_display, tl, br, (109, 93, 252), 2)  # Indigo boxes
+                    cv2.rectangle(img_for_display, tl, br, (109, 93, 252), 2)
 
     if detected_text.strip():
         if img_for_display is not None:
@@ -281,12 +275,8 @@ if uploaded_file is not None:
         st.subheader("🔍 Extracted Insight")
         st.code(detected_text, language=None)
 
-        try:
-            detected_lang = translator.detect(detected_text[:500]).lang
-            src_lang_name = LANGUAGES.get(detected_lang, "Unknown").capitalize()
-            st.markdown(f"<small>🔤 Source: <b>{src_lang_name}</b></small>", unsafe_allow_html=True)
-        except:
-            detected_lang = "auto"
+        # ✅ No language detection — just show "Auto"
+        st.markdown("<small>🔤 Source: <b>Auto-detected</b></small>", unsafe_allow_html=True)
 
         safe_text = (detected_text
                      .replace("\\", "\\\\")
@@ -302,10 +292,11 @@ if uploaded_file is not None:
         """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        if detected_lang != target_lang_code:
+        # ✅ Translate using deep-translator (no detection needed)
+        if True:  # Always offer translation
             with st.spinner(f"🌀 Translating to {target_lang[0]}..."):
                 try:
-                    translated = translator.translate(detected_text, src=detected_lang, dest=target_lang_code).text
+                    translated = GoogleTranslator(source='auto', target=target_lang_code).translate(detected_text)
                     st.markdown('<div class="result-card">', unsafe_allow_html=True)
                     st.subheader("💬 Translated Insight")
                     st.markdown(f'<span class="language-tag">{target_lang[0]}</span>', unsafe_allow_html=True)
@@ -318,7 +309,7 @@ if uploaded_file is not None:
                             tts.write_to_fp(fp)
                             fp.seek(0)
                             st.audio(fp, format="audio/mp3")
-                        except:
+                        except Exception as tts_error:
                             st.warning("🔊 TTS unavailable for this language.")
 
                     safe_trans = (translated
@@ -339,10 +330,9 @@ if uploaded_file is not None:
                     st.markdown('</div>', unsafe_allow_html=True)
 
                 except Exception as e:
-                    st.error(f"❌ Translation failed: {e}")
-        else:
-            st.info("✅ Already in target language.")
+                    st.error(f"❌ Translation failed: {str(e)}")
 
+        # === Google Lens Search ===
         if input_type == "image":
             st.markdown('<div class="result-card">', unsafe_allow_html=True)
             st.subheader("👁️ Lens Search")
@@ -352,6 +342,7 @@ if uploaded_file is not None:
                     img.save(buf, format="PNG")
                     public_url = upload_to_tmpfiles(buf.getvalue())
                     if public_url:
+                        # ✅ Fixed: no extra spaces
                         lens_url = f"https://lens.google.com/uploadbyurl?url={public_url}"
                         st.markdown(f"""
                             <div style="text-align:center; margin:1rem 0;">
@@ -379,6 +370,7 @@ if uploaded_file is not None:
 
 else:
     st.markdown('<div class="result-card" style="text-align:center; padding:2rem;">', unsafe_allow_html=True)
+    # ✅ Fixed emoji URL
     st.image("https://emojicdn.elk.sh/👁️?style=twitter&size=128", width=80)
     st.markdown("### Ready to Critique the Visible World")
     st.markdown("Upload an image, PDF, or snap a photo to begin.")
